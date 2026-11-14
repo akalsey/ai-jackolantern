@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#111111">
+  <base href="/eyes/">
+  <title>Pumpkin Remote</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme: dark; --bg: #111; --card: #1a1a1a; --fg: #ddd; --dim: #888; --line: #333; --accent: #e8730c; --stop: #e5484d; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+           background: var(--bg); color: var(--fg); font: 16px/1.45 system-ui, sans-serif; -webkit-text-size-adjust: 100%; }
+    main { max-width: 480px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0; }
+    .dim { color: var(--dim); font-size: 14px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 12px 0; }
+    .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0 0 10px; }
+    #link { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; }
+    #link::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--dim); }
+    #link.live::before { background: #3dd68c; }
+    #link.stale::before { background: var(--stop); }
+    #toggle { width: 100%; min-height: 64px; border: 0; border-radius: 12px; font: 600 22px system-ui, sans-serif;
+              background: var(--accent); color: #000; cursor: pointer; }
+    #toggle.stop { background: var(--stop); color: #fff; }
+    #toggle:disabled { background: #333; color: var(--dim); }
+    #call, #stage { margin: 4px 0; }
+    .meter { position: relative; height: 16px; border-radius: 8px; background: #222; overflow: hidden; margin: 10px 0 4px; }
+    #mic-level { height: 100%; width: 0; background: #555; transition: width 150ms linear; }
+    #mic-level.open { background: var(--accent); }
+    #mic-level.ducked { background: #4a6fa5; }
+    #mic-threshold { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--fg); }
+    label.slider { display: grid; grid-template-columns: 6.5em 1fr 4.6em; gap: 10px; align-items: center; min-height: 44px; }
+    label.slider output { text-align: right; font-variant-numeric: tabular-nums; color: var(--dim); font-size: 14px; }
+    input[type=range] { width: 100%; accent-color: var(--accent); height: 32px; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; }
+    .row label { display: flex; align-items: center; gap: 8px; }
+    input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); }
+    .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .seg button { min-height: 52px; border-radius: 10px; border: 2px solid #444; background: #222; color: var(--fg);
+                  font: 600 18px system-ui, sans-serif; }
+    .seg button.on { border-color: var(--accent); background: #2a1d10; color: #fff; }
+    .seg button[data-mode=gentle].on { border-color: #3dd68c; background: #10261b; }
+    button.small { font: inherit; font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: var(--fg); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Pumpkin Remote</h1>
+    <div id="link" class="dim">Looking for the pumpkin's computer…</div>
+
+    <button id="toggle" type="button" disabled>Start</button>
+    <p id="hint" class="dim"></p>
+
+    <div class="card">
+      <h2>This group</h2>
+      <div class="seg">
+        <button data-mode="normal" type="button">Normal</button>
+        <button data-mode="gentle" type="button">Gentle</button>
+      </div>
+      <div id="mode-line">–</div>
+      <div id="guess-line" class="dim"></div>
+      <div id="learner-line" class="dim"></div>
+      <div id="alarm-line" class="dim"></div>
+    </div>
+
+    <div class="card">
+      <h2>Now</h2>
+      <div id="call">–</div>
+      <div id="stage" class="dim">–</div>
+      <div class="meter"><div id="mic-level"></div><div id="mic-threshold"></div></div>
+      <div class="dim">Mic level. Orange when the gate is letting sound through; blue while the pumpkin is talking and the mic is muted.</div>
+      <div id="echo" class="dim"></div>
+    </div>
+
+    <div class="card">
+      <h2>Voice</h2>
+      <div class="row">
+        <label><input id="effects-on" type="checkbox"> Effects on</label>
+        <button class="small" data-reset="effects" type="button">Reset</button>
+      </div>
+      <div data-sliders="effects"></div>
+    </div>
+
+    <div class="card">
+      <h2>Stage</h2>
+      <div data-sliders="stage"></div>
+      <div class="row"><span class="dim">Raise if people across the street count.</span>
+        <button class="small" data-reset="stage" type="button">Reset</button></div>
+    </div>
+
+    <div class="card">
+      <h2>Mic gate</h2>
+      <div data-sliders="gate"></div>
+      <div class="row"><span class="dim">Set just above the background.</span>
+        <button class="small" data-reset="gate" type="button">Reset</button></div>
+    </div>
+
+    <p class="dim"><a href="/eyes/" style="color: var(--accent)">Pumpkin page</a> ·
+      <a href="calls.html" style="color: var(--accent)">Call log</a></p>
+  </main>
+
+  <script type="module">
+    import { CONTROLS, meterPercent, readout, renderSliders } from "./controls.js";
+
+    const STATUS_MS = 1000;
+    const STALE_SECONDS = 5; // no report for this long: the pumpkin's computer is gone
+    const HANDS_OFF_MS = 2500; // after a slider is touched, don't overwrite it from status
+    const SEND_EVERY_MS = 150;
+
+    const $ = (id) => document.getElementById(id);
+    const toggle = $("toggle");
+    const effectsOn = $("effects-on");
+
+    const send = (kind, name, value) =>
+      fetch("/eyes-remote/command", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind, name, value }),
+      }).catch(() => {});
+
+    // Sliders: sent while dragging (throttled) and on release. Incoming status
+    // leaves a slider alone for a moment after it's touched, so it doesn't jump.
+    const sliders = {};
+    for (const [group, specs] of Object.entries(CONTROLS)) {
+      Object.assign(sliders, renderSliders(document.querySelector(`[data-sliders="${group}"]`), specs));
+    }
+    for (const [name, slider] of Object.entries(sliders)) {
+      slider.touched = 0;
+      let lastSent = 0;
+      const update = (final) => {
+        slider.touched = Date.now();
+        slider.output.textContent = readout(name, Number(slider.input.value));
+        if (final || Date.now() - lastSent >= SEND_EVERY_MS) {
+          lastSent = Date.now();
+          send("set", name, Number(slider.input.value));
+        }
+      };
+      slider.input.oninput = () => update(false);
+      slider.input.onchange = () => update(true);
+    }
+
+    effectsOn.onchange = () => {
+      effectsOn.touched = Date.now();
+      send("set", "effectsOn", effectsOn.checked);
+    };
+    for (const button of document.querySelectorAll("[data-reset]")) {
+      button.onclick = () => send("reset", button.dataset.reset);
+    }
+
+    // The group switch. Each press is also a training example for the server's
+    // small-child learner, so press it to confirm a mode as well as to change it.
+    const modeButtons = document.querySelectorAll("[data-mode]");
+    // The operator's choice shows until the pumpkin catches up (bringing the act
+    // back takes the model a few seconds), or until MODE_WAIT_MS passes.
+    const MODE_WAIT_MS = 20000;
+    let modeTouched = 0;
+    let modeWanted = null;
+    const showMode = (mode) => modeButtons.forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+    for (const button of modeButtons) {
+      button.onclick = async () => {
+        modeTouched = Date.now();
+        modeWanted = button.dataset.mode;
+        showMode(modeWanted);
+        try {
+          const response = await fetch("/eyes-remote/mode", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ mode: button.dataset.mode }),
+          });
+          showLearner((await response.json()).learner);
+          modeTouched = Date.now(); // keep an in-flight status poll from showing the old count
+        } catch {}
+      };
+    }
+    const MODE_TEXT = {
+      normal: "The pumpkin is doing its usual act.",
+      gentle: "The pumpkin is in gentle mode.",
+      idle: "Nobody is being performed for right now.",
+    };
+    const pct = (v) => `${Math.round(v * 100)}%`;
+    function showLearner(learner) {
+      if (!learner) return;
+      const base = `${learner.operator_choices} of your choices, ${learner.height_examples} height examples ` +
+        `(${learner.height_child_examples} small children).`;
+      $("learner-line").textContent = learner.height_cutoff != null
+        ? `Learned: anyone under ${pct(learner.height_cutoff)} of the frame, head to feet, is a small child. From ${base}`
+        : `Still learning the small-child height (${base}) Meanwhile, a group whose shortest is under ` +
+          `${pct(learner.ratio_cutoff)} of its tallest counts as having one.`;
+    }
+
+    let running = false;
+    toggle.onclick = () => {
+      running = !running;
+      toggle.touched = Date.now();
+      showRunning(running);
+      send("run", null, running);
+    };
+
+    function showRunning(on) {
+      toggle.textContent = on ? "Stop the show" : "Start the show";
+      toggle.classList.toggle("stop", on);
+    }
+
+    // The server's latest restart or alarm (visit_state.py), shown for ten minutes.
+    const ALARM_SHOW_MS = 10 * 60 * 1000;
+
+    function showAlarm(alarms) {
+      const last = (alarms || []).at(-1);
+      const recent = last && Date.now() - last.t * 1000 < ALARM_SHOW_MS;
+      $("alarm-line").textContent = recent
+        ? `${new Date(last.t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}: ${last.text}`
+        : "";
+    }
+
+    function showStatus({ status, age, mode, measured, guess, learner, alarms }) {
+      showAlarm(alarms);
+      const waiting = modeWanted && modeWanted !== mode && Date.now() - modeTouched < MODE_WAIT_MS;
+      if (!waiting) modeWanted = null;
+      const fresh = !waiting && Date.now() - modeTouched > 4000;
+      if (fresh) showMode(mode);
+      $("mode-line").textContent = waiting
+        ? `Switching to ${modeWanted === "gentle" ? "gentle mode" : "the usual act"}…`
+        : MODE_TEXT[mode] || "–";
+      const verdict = guess?.child ? "looks like a small child is here." : "looks like no small child.";
+      $("guess-line").textContent =
+        guess?.rule === "height" ? `Shortest is ${pct(measured.shortest)} of the frame, head to feet: ${verdict}`
+        : guess?.rule === "ratio" ? `Shortest is ${pct(measured.ratio)} as tall as the tallest: ${verdict}`
+        : "No measurement: nobody on stage with head and feet both in view.";
+      if (fresh) showLearner(learner);
+      const link = $("link");
+      const live = status && age <= STALE_SECONDS;
+      link.className = `dim ${status ? (live ? "live" : "stale") : ""}`;
+      link.textContent = !status
+        ? "The pumpkin page isn't open."
+        : live ? "Pumpkin computer connected." : `Pumpkin computer silent for ${Math.round(age)}s.`;
+      if (!live) {
+        toggle.disabled = true;
+        $("hint").textContent = "Open the pumpkin page to control the pumpkin.";
+        return;
+      }
+
+      toggle.disabled = !status.armed;
+      $("hint").textContent = status.armed ? "" : "Click Start on the pumpkin page once; after that, the remote can start and stop it.";
+      if (Date.now() - (toggle.touched || 0) > HANDS_OFF_MS) {
+        running = status.running;
+        showRunning(running);
+      }
+      $("call").textContent = status.status || "–";
+      $("stage").textContent = status.stage || "–";
+
+      const mic = status.mic;
+      $("mic-level").style.width = mic ? meterPercent(mic.levelDb) : "0%";
+      $("mic-level").classList.toggle("open", Boolean(mic?.open));
+      $("mic-level").classList.toggle("ducked", Boolean(mic?.ducked));
+      $("echo").textContent = status.echoCancellation == null ? ""
+        : `Mic echo cancellation: ${status.echoCancellation ? "on" : "off; the mic is still muted while the pumpkin talks"}.`;
+      $("mic-threshold").style.left = meterPercent(status.settings.thresholdDb);
+
+      for (const [name, slider] of Object.entries(sliders)) {
+        const value = status.settings[name];
+        if (value === undefined || Date.now() - slider.touched < HANDS_OFF_MS) continue;
+        slider.input.value = value;
+        slider.output.textContent = readout(name, value);
+      }
+      if (Date.now() - (effectsOn.touched || 0) > HANDS_OFF_MS) effectsOn.checked = status.settings.effectsOn;
+    }
+
+    async function poll() {
+      try {
+        showStatus(await (await fetch("/eyes-remote/status")).json());
+      } catch {
+        $("link").className = "dim stale";
+        $("link").textContent = "Can't reach the server.";
+      }
+    }
+    setInterval(poll, STATUS_MS);
+    poll();
+  </script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pumpkin QC</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme: dark; --bg: #111; --fg: #ddd; --dim: #888; --line: #333; --accent: #e8730c; --warn: #e5484d; --good: #3dd68c; }
+    body { margin: 0; padding: 24px 16px; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 820px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    a { color: var(--accent); }
+    .dim { color: var(--dim); }
+    button, select { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid #444; background: #222; color: var(--fg); }
+    #tally { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; }
+    .badge { font-size: 13px; padding: 2px 10px; border-radius: 10px; background: #222; }
+    .badge.bad { background: var(--warn); color: #fff; }
+    .badge.good { background: #10261b; color: var(--good); }
+    .finding { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 8px 0; }
+    .finding.bad { border-color: var(--warn); }
+    .head { font-size: 13px; color: var(--dim); }
+    .said { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .label { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); margin-right: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Pumpkin QC</h1>
+    <p class="dim">What a second AI listening to the call expected the pumpkin to say, what it
+      actually said, and whether its tools fit. Today's findings, newest first.
+      <a href="/eyes/calls.html">Call log</a> · <a href="/eyes/">Pumpkin Eyes</a></p>
+    <button id="refresh" type="button">Refresh</button>
+    <select id="filter">
+      <option value="problems">Problems only</option>
+      <option value="all">Everything</option>
+    </select>
+    <div id="tally"></div>
+    <section id="findings"></section>
+  </main>
+
+  <script type="module">
+    // Verdicts that mean something needs attention.
+    const BAD = new Set(["deviation", "unanswered", "off_personality", "broke_character", "too_long",
+                         "unexpected", "wrong_tool"]);
+    const GOOD = new Set(["as_expected", "acceptable_variation", "expected", "acceptable"]);
+    const findings = document.getElementById("findings");
+    const tally = document.getElementById("tally");
+    const filter = document.getElementById("filter");
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+    function row(label, text) {
+      const p = el("p", "said");
+      p.append(el("span", "label", label), text || "–");
+      return p;
+    }
+    const isBad = (e) => BAD.has(e.verdict) || e.kind === "sidecar_error" || e.kind === "sidecar_insight";
+
+    async function load() {
+      const entries = await (await fetch("/eyes-qc")).json();
+      const counts = {};
+      for (const e of entries) if (e.verdict) counts[e.verdict] = (counts[e.verdict] || 0) + 1;
+      tally.replaceChildren(...Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([verdict, n]) =>
+        el("span", `badge ${BAD.has(verdict) ? "bad" : GOOD.has(verdict) ? "good" : ""}`, `${verdict.replaceAll("_", " ")}: ${n}`)));
+
+      // A prediction is shown with the review that follows it for the same words.
+      const predicted = new Map();
+      for (const e of entries) if (e.kind === "predict_answer") predicted.set(e.visitor_said, e.expected);
+      const shown = entries.filter((e) => e.kind !== "predict_answer" && e.kind !== "sidecar_start")
+        .filter((e) => filter.value === "all" || isBad(e)).reverse();
+      findings.replaceChildren(...shown.map((e) => {
+        const box = el("div", `finding ${isBad(e) ? "bad" : ""}`);
+        const time = new Date(e.t * 1000).toLocaleTimeString();
+        box.append(el("div", "head", `${time} · ${e.kind.replaceAll("_", " ")}${e.verdict ? " · " + e.verdict.replaceAll("_", " ") : ""}`));
+        if (e.kind === "review_answer") {
+          box.append(row("visitor", e.visitor_said), row("expected", predicted.get(e.visitor_said)),
+                     row("pumpkin", e.actual), row("note", e.notes));
+        } else if (e.kind === "review_tool" || e.kind === "tool_used") {
+          box.append(row("tool", e.tool), e.notes ? row("note", e.notes) : row("arguments", JSON.stringify(e.arguments || {})));
+        } else {
+          box.append(row("detail", e.raw || e.detail || e.error_reason || e.stop_reason || JSON.stringify(e)));
+        }
+        return box;
+      }));
+      if (!shown.length) findings.replaceChildren(el("p", "dim", "Nothing to show yet."));
+    }
+
+    document.getElementById("refresh").onclick = load;
+    filter.onchange = load;
+    load();
+  </script>
+</body>
+</html>

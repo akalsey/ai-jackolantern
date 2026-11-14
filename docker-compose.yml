@@ -1,0 +1,30 @@
+services:
+  scarecrow:
+    build: .
+    container_name: scarecrow
+    restart: always
+    env_file: .env
+    environment:
+      # PUBLIC_HOST comes from .env: the hostname nginx-proxy routes here.
+      VIRTUAL_HOST: ${PUBLIC_HOST:?Set PUBLIC_HOST in .env}
+      LETSENCRYPT_HOST: ${PUBLIC_HOST:?Set PUBLIC_HOST in .env}
+      VIRTUAL_PORT: "3000"
+      # The agent builds its function webhook URLs from this.
+      SWML_PROXY_URL_BASE: https://${PUBLIC_HOST:?Set PUBLIC_HOST in .env}
+      CALL_LOG_DIR: /data/call-logs
+    volumes:
+      # The live checkout. A git pull updates the running agent without a restart.
+      - ./:/app:ro
+      # End-of-call reports, kept across rebuilds. Read them at /eyes/calls.html.
+      - call-logs:/data/call-logs
+    networks:
+      - nginx-proxy
+    expose:
+      - "3000" # expose is needed for nginx-proxy
+
+networks:
+  nginx-proxy:
+    external: true
+
+volumes:
+  call-logs:

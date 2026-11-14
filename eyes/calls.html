@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pumpkin Call Log</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme: dark; --bg: #111; --fg: #ddd; --dim: #888; --line: #333; --accent: #e8730c; --warn: #e5484d; }
+    body { margin: 0; padding: 24px 16px; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 820px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    a { color: var(--accent); }
+    .dim { color: var(--dim); }
+    button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid #444; background: #222; color: var(--fg); cursor: pointer; }
+    #calls { list-style: none; padding: 0; margin: 16px 0; }
+    #calls li { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 8px 0; cursor: pointer; }
+    #calls li:hover, #calls li.selected { border-color: var(--accent); }
+    .when { font-variant-numeric: tabular-nums; }
+    .badge { display: inline-block; font-size: 13px; padding: 0 8px; border-radius: 10px; background: #222; margin-left: 6px; }
+    .badge.warn { background: var(--warn); color: #fff; }
+    #transcript { margin-top: 24px; }
+    .line { margin: 6px 0; padding: 6px 10px; border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .visitor { background: #1b2430; }
+    .pumpkin { background: #2a1d10; }
+    .pumpkin.off { outline: 2px solid var(--warn); }
+    .call, .result { font: 13px/1.4 ui-monospace, monospace; color: var(--dim); }
+    .who { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); display: block; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Pumpkin Call Log</h1>
+    <p class="dim">One entry per call, written when the call ends. <a href="/eyes/">Back to Pumpkin Eyes</a> · <a href="/eyes/qc.html">QC findings</a></p>
+    <button id="refresh" type="button">Refresh</button>
+    <ul id="calls"></ul>
+    <section id="transcript"></section>
+  </main>
+
+  <script type="module">
+    const list = document.getElementById("calls");
+    const transcript = document.getElementById("transcript");
+
+    // Report timestamps are microseconds since the epoch.
+    const when = (us) => us ? new Date(us / 1000).toLocaleString() : "unknown time";
+    const minutes = (a, b) => a && b ? `${Math.max(1, Math.round((b - a) / 60e6))} min` : "";
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    async function loadCalls() {
+      list.replaceChildren(el("li", "dim", "Loading…"));
+      const calls = await (await fetch("/eyes-calls")).json();
+      list.replaceChildren();
+      if (!calls.length) list.append(el("li", "dim", "No calls logged yet."));
+      for (const call of calls) {
+        const item = el("li");
+        const head = el("div");
+        head.append(el("span", "when", when(call.started)), el("span", "dim", `  ${minutes(call.started, call.ended)}`));
+        head.append(el("span", "badge", `looked ${call.looks}×`));
+        if (call.off_character) head.append(el("span", "badge warn", `${call.off_character} off-character`));
+        item.append(head, el("div", "dim", call.summary || "No summary."));
+        item.onclick = () => {
+          for (const other of list.children) other.classList.remove("selected");
+          item.classList.add("selected");
+          showCall(call.id);
+        };
+        list.append(item);
+      }
+    }
+
+    const LABELS = { visitor: "Visitor", pumpkin: "Pumpkin", call: "Function call", result: "Returned" };
+
+    async function showCall(id) {
+      transcript.replaceChildren(el("p", "dim", "Loading…"));
+      const response = await fetch(`/eyes-calls/${encodeURIComponent(id)}`);
+      if (!response.ok) return transcript.replaceChildren(el("p", "dim", "Couldn't load that call."));
+      const { call, lines } = await response.json();
+      transcript.replaceChildren(el("h2", "", `Call at ${when(call.started)}`));
+      for (const line of lines) {
+        const row = el("div", `line ${line.who}${line.off_character ? " off" : ""}`);
+        const label = line.who === "result" ? `${LABELS.result} by ${line.fn}` : LABELS[line.who];
+        row.append(el("span", "who", label), document.createTextNode(line.text));
+        transcript.append(row);
+      }
+      transcript.scrollIntoView({ behavior: "smooth" });
+    }
+
+    document.getElementById("refresh").onclick = loadCalls;
+    loadCalls();
+  </script>
+</body>
+</html>

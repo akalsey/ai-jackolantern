@@ -1,0 +1,10 @@
+.env
+__pycache__/
+.DS_Store
+# Reference example, not part of the agent
+sigmond-example.py
+surroundings.txt
+.claude/
+
+# Recorded nights for sim/replay.py: visitors speech, kept out of the published repo
+sim/data/

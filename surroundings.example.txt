@@ -1,0 +1,12 @@
+# Facts about your yard and your prop, one per line. Copy this file to
+# surroundings.txt next to pumpkin_agent.py and make it yours; surroundings.txt
+# stays out of git. The pumpkin uses these in the act, or pretends it has never
+# noticed them. Lines starting with # are ignored. The agent restarts itself
+# when the file changes; the pumpkin's next call uses it.
+
+The neighborhood is Maple Hollow, in the town of Riverton.
+A juggler named Sam is performing a few houses down.
+The people handing out candy are sitting outside, just to your left.
+There's a stack of carved pumpkins on the porch steps.
+A fog machine fills the bushes behind you with smoke.
+You wear blue overalls and a straw hat, and a crow is perched on your shoulder.
